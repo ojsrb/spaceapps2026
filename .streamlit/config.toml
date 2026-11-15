@@ -1,10 +1,12 @@
-[theme]
+[theme] #general theme over both light and dark mode
 font= "'Libre Baskerville':https://fonts.google.com/specimen/Libre+Baskerville?categoryFilters=Serif:%2FSerif%2FTransitional&preview.script=Latn"
 baseRadius= "0.5rem"
 
 [theme.light]
 backgroundColor= "#EdE9F1" 
+#primary is button hover/clicked, sliders
 primaryColor= "#C9B5E0" 
+#input in widgets/selection section
 secondaryBackgroundColor="#C9B5E0" 
 textColor= "#00105B"
 borderColor= "#6061B6" 
