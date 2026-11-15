@@ -32,7 +32,7 @@ if "downoading" not in st.session_state:
 
 if "current_image" not in st.session_state:
     # st.session_state.current_image = "testImage.jpg"
-    st.session_state.current_image = "logo-trans.png"
+    st.session_state.current_image = "images/logo-trans.png"
 
 if "date_choices" not in st.session_state:
     st.session_state.date_choices = ["", "Please Submit Data Before Choosing A Date", " "]
@@ -66,15 +66,21 @@ def submit():
 
         gen = data.get_image(st.session_state.ra, st.session_state.dec)
         downloads_needed = next(gen)
+        progress = 0
+
+        loading_bar = st.progress(0, "Started downloading images...")
         while True:
             try:
-                next(gen)
+                progress = next(gen)
+                loading_bar.progress(
+                    float(progress / downloads_needed), 
+                    f"Started downloading images ({progress}/{downloads_needed})"
+                )
+                print(f"Progress: {progress}/{downloads_needed}, {float(progress / downloads_needed)}")
             except StopIteration as e:
                 st.session_state.dates_to_wavelengths = e.value
-            
-
-        loading_bar = st.progress(.5, "Downloading Images...")
-        loading_bar.empty()
+                loading_bar.empty()
+                break
 
         st.session_state.date_choices = list(st.session_state.dates_to_wavelengths)
         if st.session_state.date_choices:
