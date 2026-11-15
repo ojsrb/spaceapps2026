@@ -62,10 +62,25 @@ def upDATE():
 
 def submit():
     if (st.session_state.ra or st.session_state.ra == 0) and (st.session_state.dec or st.session_state.dec == 0):
-        st.session_state.dates_to_wavelengths = data.get_image(st.session_state.ra, st.session_state.dec) # OLD
+        # st.session_state.dates_to_wavelengths = data.get_image(st.session_state.ra, st.session_state.dec) # OLD
 
-        loading_bar = st.progress(.5, "Downloading Images...")
-        loading_bar.empty()
+        gen = data.get_image(st.session_state.ra, st.session_state.dec)
+        downloads_needed = next(gen)
+        progress = 0
+
+        loading_bar = st.progress(0, "Started downloading images...")
+        while True:
+            try:
+                progress = next(gen)
+                loading_bar.progress(
+                    float(progress / downloads_needed), 
+                    f"Started downloading images ({progress}/{downloads_needed})"
+                )
+                print(f"Progress: {progress}/{downloads_needed}, {float(progress / downloads_needed)}")
+            except StopIteration as e:
+                st.session_state.dates_to_wavelengths = e.value
+                loading_bar.empty()
+                break
 
         st.session_state.date_choices = list(st.session_state.dates_to_wavelengths)
         if st.session_state.date_choices:

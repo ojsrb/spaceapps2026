@@ -64,13 +64,16 @@ def download_group(ra, dec):
 
     max_threads = 32
 
-    # yield len(results) # pass how many images are need to process
+    threads_started = 0
+
+    yield len(results) # pass how many images are need to process
 
     for result in results:
         while threading.active_count() > max_threads:
             time.sleep(0.1)
-        # yield 1
         threading.Thread(target=_download_image_thread(result)).start()
+        threads_started += 1
+        yield threads_started
 
 def _download_group_thread(ra, dec):
     def thread():
