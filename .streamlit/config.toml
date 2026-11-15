@@ -1,0 +1,17 @@
+[theme]
+font= "'Libre Baskerville':https://fonts.google.com/specimen/Libre+Baskerville?categoryFilters=Serif:%2FSerif%2FTransitional&preview.script=Latn"
+baseRadius= "0.5rem"
+
+[theme.light]
+backgroundColor= "#EdE9F1" 
+primaryColor= "#C9B5E0" 
+secondaryBackgroundColor="#C9B5E0" 
+textColor= "#00105B"
+borderColor= "#6061B6" 
+
+[theme.dark]    
+backgroundColor="#1b1c1e" 
+primaryColor= "#6061B6"
+secondaryBackgroundColor="#6061B6" 
+borderColor= "#C9B5E0" 
+textColor= "#FCF9EC"
