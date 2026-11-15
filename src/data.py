@@ -41,13 +41,13 @@ def download_group(ra, dec):
         return
 
     # Looks for results
-    coord = SkyCoord(ra=150.7818, dec=3.3502, unit='deg')
+    coord = SkyCoord(ra=150.7818, dec=3.3502, unit='deg', frame='icrs')
 
     print("Querying IRSA for images...")
 
     while True:
         try:
-            results = Irsa.query_sia(pos=(coord, 10.0 * u.arcsec), collection='spherex_dr1')
+            results = Irsa.query_sia(pos=(coord, 1.0 * u.arcmin), collection='spherex_dr1')
             break
         except Exception as e:
             print(f"Error occurred: {e}. Retrying...")
@@ -74,6 +74,11 @@ def download_group(ra, dec):
         threading.Thread(target=_download_image_thread(result)).start()
         threads_started += 1
         yield threads_started
+
+def _download_group_thread(ra, dec):
+    def thread():
+        download_group(ra, dec)
+    return thread
 
 def _download_image_thread(result):
     def thread():
@@ -108,12 +113,10 @@ def _download_image_thread(result):
 def get_image(ra, dec):
     final = {}
     if not os.path.exists(f'data/{ra}-{dec}'):
-        gen = download_group(ra, dec)
-        while True:
-            try:
-                yield next(gen)
-            except StopIteration as e:
-                break
+        print('starting download')
+        # threading.Thread(target=_download_group_thread(ra, dec)).start()
+        download_group(ra, dec)
+        return
 
     dates = os.listdir(f'data/{ra}-{dec}')
     dates.sort()
@@ -123,15 +126,15 @@ def get_image(ra, dec):
         final[date] = []
         wavelengths = os.listdir(f'data/{ra}-{dec}/{date}')
         for wavelength in wavelengths:
-            final[date].append(float(wavelength.replace('.png', '')))
+            final[date].append(float(wavelength.replace('.png', ''))) # type: ignore
     
         final[date].sort()
 
     return final
 
 if __name__ == "__main__":
-    ra = 150.7818
-    dec = 3.3502
+    ra = 133.795129
+    dec = -7.245147
     print(get_image(ra, dec))
 
         

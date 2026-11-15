@@ -6,7 +6,7 @@ import os
 st.set_page_config(
     layout="wide",
     page_title="Cosmic Viewport",
-    page_icon="logo-color.png",
+    page_icon="images/logo-color.png",
 )
 
 if "playback_dir" not in st.session_state:
@@ -174,7 +174,7 @@ with col2:
 
         st.button("Stop" if st.session_state.is_playing else "Play", on_click=toggle_play)
 
-logo = st.logo("logo-color.png", icon_image="logo-color.png")
+logo = st.logo("images/logo-color.png", icon_image="images/logo-color.png")
 
 # loading_bar = st.progress(100, text="Downloading Images")
 # loading_bar.empty()
