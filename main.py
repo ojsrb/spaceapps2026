@@ -6,7 +6,7 @@ import os
 st.set_page_config(
     layout="wide",
     page_title="Cosmic Viewport",
-    page_icon="logo-color.png",
+    page_icon="images/logo-color.png",
 )
 
 if "playback_dir" not in st.session_state:
@@ -32,7 +32,7 @@ if "downoading" not in st.session_state:
 
 if "current_image" not in st.session_state:
     # st.session_state.current_image = "testImage.jpg"
-    st.session_state.current_image = "logo-trans.png"
+    st.session_state.current_image = "images/logo-trans.png"
 
 if "date_choices" not in st.session_state:
     st.session_state.date_choices = ["", "Please Submit Data Before Choosing A Date", " "]
@@ -62,16 +62,7 @@ def upDATE():
 
 def submit():
     if (st.session_state.ra or st.session_state.ra == 0) and (st.session_state.dec or st.session_state.dec == 0):
-        # st.session_state.dates_to_wavelengths = data.get_image(st.session_state.ra, st.session_state.dec) # OLD
-
-        gen = data.get_image(st.session_state.ra, st.session_state.dec)
-        downloads_needed = next(gen)
-        while True:
-            try:
-                next(gen)
-            except StopIteration as e:
-                st.session_state.dates_to_wavelengths = e.value
-            
+        st.session_state.dates_to_wavelengths = data.get_image(st.session_state.ra, st.session_state.dec) # OLD
 
         loading_bar = st.progress(.5, "Downloading Images...")
         loading_bar.empty()
@@ -168,7 +159,7 @@ with col2:
 
         st.button("Stop" if st.session_state.is_playing else "Play", on_click=toggle_play)
 
-logo = st.logo("logo-color.png", icon_image="logo-color.png")
+logo = st.logo("images/logo-color.png", icon_image="images/logo-color.png")
 
 # loading_bar = st.progress(100, text="Downloading Images")
 # loading_bar.empty()
