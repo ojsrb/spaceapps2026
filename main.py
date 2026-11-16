@@ -203,6 +203,12 @@ if st.session_state.download_request:
     finally:
         st.session_state.downloading = False
 
+
+st.markdown("" \
+"## Cosmic Viewport" \
+"\n\n" \
+"Cosmic Viewport is a tool for exploring the universe through images captured by NASA's SPHEREx mission")
+
 col1, col2 = st.columns([2, 1], vertical_alignment="top", gap="large")
 
 with col1:
