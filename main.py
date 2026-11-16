@@ -9,8 +9,11 @@ st.set_page_config(
     page_icon="images/logo-color.png",
 )
 
+if "target_wave" not in st.session_state:
+    st.session_state.target_wave = 0
+
 if "playback_dir" not in st.session_state:
-    st.session_state.playback_dir = 1  # 1 = forward, -1 = backward
+    st.session_state.playback_dir = 1
 
 if "is_playing" not in st.session_state:
     st.session_state.is_playing = False
@@ -22,13 +25,18 @@ if "dec" not in st.session_state:
     st.session_state.dec = 3.3502
 
 if "dates_to_wavelengths" not in st.session_state:
-    st.session_state.dates_to_wavelengths = {"Downloading": ["Downloading"]}
+    st.session_state.dates_to_wavelengths = {}
 
 if "error_text" not in st.session_state:
     st.session_state.error_text = ""
 
-if "downoading" not in st.session_state:
+if "downloading" not in st.session_state:
     st.session_state.downloading = False
+
+# Set by the Submit callback, acted on further down by the script body. Doing the
+# download there is what lets st.progress render and update in the browser.
+if "download_request" not in st.session_state:
+    st.session_state.download_request = False
 
 if "current_image" not in st.session_state:
     # st.session_state.current_image = "testImage.jpg"
@@ -40,63 +48,126 @@ if "date_choices" not in st.session_state:
 if "wave_choices" not in st.session_state:
     st.session_state.wave_choices = ["", "Please Submit Data Before Choosing A Wavelength", " "]
 
-# Get it, it updates the date :)
 def upWAVE():
     if st.session_state.dates_to_wavelengths:
+        st.session_state.target_wave = st.session_state.wave_slider
         st.session_state.current_image = f"data/{st.session_state.ra}-{st.session_state.dec}/{st.session_state.date_slider}/{st.session_state.wave_slider}.png"
 
+# Get it, it updates the date :)
 def upDATE():
     if st.session_state.dates_to_wavelengths:
-        st.session_state.wave_choices = st.session_state.dates_to_wavelengths.get(st.session_state.date_slider)
+        st.session_state.wave_choices = st.session_state.dates_to_wavelengths.get(st.session_state.date_slider) or []
+        if not st.session_state.wave_choices:
+            return
         if type(st.session_state.wave_slider) is not str:
             best = st.session_state.wave_choices[0]
-            dist = abs(st.session_state.wave_choices[0] - st.session_state.wave_slider)
+            dist = abs(st.session_state.wave_choices[0] - st.session_state.target_wave)
             for choice in st.session_state.wave_choices:
-                if abs(choice - st.session_state.wave_slider) < dist:
+                if abs(choice - st.session_state.target_wave) < dist:
                     best = choice
-                    dist = abs(choice - st.session_state.wave_slider)
+                    dist = abs(choice - st.session_state.target_wave)
             st.session_state.wave_slider = best
         else:
             st.session_state.wave_slider = st.session_state.wave_choices[0]
         st.session_state.current_image = f"data/{st.session_state.ra}-{st.session_state.dec}/{st.session_state.date_slider}/{st.session_state.wave_slider}.png"
 
+def parse_coordinate(raw_value, label):
+    """Turn a text field into a float, writing a readable message when it is not usable."""
+    text = (raw_value or "").strip()
+    if not text:
+        st.session_state.error_text = ":red[Please put in all required information!]"
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        st.session_state.error_text = f":red[Please enter a number for {label}.]"
+        return None
+
 def submit():
-    if (st.session_state.ra or st.session_state.ra == 0) and (st.session_state.dec or st.session_state.dec == 0):
-        # st.session_state.dates_to_wavelengths = data.get_image(st.session_state.ra, st.session_state.dec) # OLD
+    st.session_state.error_text = ""
+    st.session_state.downloading = False
 
-        gen = data.get_image(st.session_state.ra, st.session_state.dec)
-        downloads_needed = next(gen)
-        progress = 0
+    ra = parse_coordinate(st.session_state.get("ra_input"), "Right Ascension")
+    dec = parse_coordinate(st.session_state.get("dec_input"), "Declination")
+    if ra is None or dec is None:
+        return
 
-        loading_bar = st.progress(0, "Started downloading images...")
+    if not 0 <= ra <= 360:
+        st.session_state.error_text = ":red[Right Ascension must be between 0 and 360 degrees.]"
+        return
+
+    if not -90 <= dec <= 90:
+        st.session_state.error_text = ":red[Declination must be between -90 and 90 degrees.]"
+        return
+
+    st.session_state.ra = ra
+    st.session_state.dec = dec
+    st.session_state.download_request = True # the body of the script does the work, so progress can render
+
+def load_images(ra, dec):
+    """Drive the get_image generator from the script body, where st.progress updates live."""
+    dates_to_wavelengths = {}
+    downloads_needed = None
+    loading_bar = st.progress(0.0, "Looking for images...")
+
+    try:
+        gen = data.get_image(ra, dec)
         while True:
             try:
-                progress = next(gen)
-                loading_bar.progress(
-                    float(progress / downloads_needed), 
-                    f"Started downloading images ({progress}/{downloads_needed})"
-                )
-                print(f"Progress: {progress}/{downloads_needed}, {float(progress / downloads_needed)}")
-            except StopIteration as e:
-                st.session_state.dates_to_wavelengths = e.value
-                loading_bar.empty()
+                value = next(gen)
+            except StopIteration as finished:
+                # A generator finishes by raising StopIteration, handing back its return
+                # value (the dates -> wavelengths dict) as finished.value
+                dates_to_wavelengths = finished.value or {}
                 break
 
-        st.session_state.date_choices = list(st.session_state.dates_to_wavelengths)
-        if st.session_state.date_choices:
-            st.session_state.date_slider = st.session_state.date_choices[0]
+            if downloads_needed is None:
+                downloads_needed = value # the first thing yielded is how many images are needed
+                loading_bar.progress(0.0, f"Downloading {downloads_needed} images...")
+            elif downloads_needed:
+                # st.progress wants a single float, and value can pass the total when a
+                # cached image shows up twice, so clamp it instead of overflowing 1.0.
+                ratio = min(1.0, value / downloads_needed)
+                loading_bar.progress(ratio, f"Downloaded {value}/{downloads_needed} images")
+    except Exception as e:
+        st.session_state.error_text = f":red[Could not load images: {e}]"
+    finally:
+        loading_bar.empty()
 
-        st.session_state.wave_choices = st.session_state.dates_to_wavelengths.get(st.session_state.date_slider)
-        if st.session_state.wave_choices:
-            st.session_state.wave_slider = st.session_state.wave_choices[0]
+    return dates_to_wavelengths
 
-        new_img_url = f"data/{st.session_state.ra}-{st.session_state.dec}/{st.session_state.date_slider}/{st.session_state.wave_slider}.png"
-        if os.path.exists(new_img_url):
-            st.session_state.current_image = new_img_url
-        else:
-            st.session_state.downloading = True
+def apply_results(dates_to_wavelengths):
+    """Store the fetched data and point the sliders at an image that actually exists."""
+    st.session_state.dates_to_wavelengths = dates_to_wavelengths or {}
+
+    # Nothing was downloaded or cached for this position
+    if not st.session_state.dates_to_wavelengths:
+        if not st.session_state.error_text:
+            st.session_state.error_text = ":red[No images were found for those coordinates.]"
+        st.session_state.date_choices = ["", "Please Submit Data Before Choosing A Date", " "]
+        st.session_state.wave_choices = ["", "Please Submit Data Before Choosing A Wavelength", " "]
+        return
+
+    st.session_state.date_choices = list(st.session_state.dates_to_wavelengths)
+
+    failed = getattr(dates_to_wavelengths, "failed", 0)
+    if failed and not st.session_state.error_text:
+        st.session_state.error_text = f":orange[{failed} image(s) could not be downloaded, submit again to retry them.]"
+
+    # Keep the current selection if it is still valid, otherwise fall back to the first one
+    if st.session_state.get("date_slider") not in st.session_state.date_choices:
+        st.session_state.date_slider = st.session_state.date_choices[0]
+
+    st.session_state.wave_choices = st.session_state.dates_to_wavelengths.get(st.session_state.date_slider) or []
+
+    if st.session_state.get("wave_slider") not in st.session_state.wave_choices:
+        st.session_state.wave_slider = st.session_state.wave_choices[0]
+
+    new_img_url = f"data/{st.session_state.ra}-{st.session_state.dec}/{st.session_state.date_slider}/{st.session_state.wave_slider}.png"
+    if os.path.exists(new_img_url):
+        st.session_state.current_image = new_img_url
     else:
-        st.session_state.error_text = ":red[Please put in all required information!]"
+        st.session_state.error_text = ":red[That image is missing from the cache, please submit again.]"
 
 def toggle_play():
     if "Please Submit Data Before Choosing A Date" not in st.session_state.date_choices:
@@ -122,62 +193,62 @@ if st.session_state.is_playing:
     except (ValueError, KeyError):
         st.session_state.is_playing = False
 
+# A pending submit is handled here, in the body of the script, so st.progress can
+# render and update in the browser while the images are fetched.
+if st.session_state.download_request:
+    st.session_state.download_request = False
+    st.session_state.downloading = True
+    try:
+        apply_results(load_images(st.session_state.ra, st.session_state.dec))
+    finally:
+        st.session_state.downloading = False
+
 col1, col2 = st.columns([2, 1], vertical_alignment="top", gap="large")
 
 with col1:
-    st.image(st.session_state.current_image, use_container_width=True, )
+    st.image(st.session_state.current_image, width="stretch")
 
 with col2:
-    raw_ra = st.text_input("Right Ascension", placeholder="Enter Numbers", value="150.7818", disabled=st.session_state.is_playing)
-    
-    if raw_ra:
-        try:
-            st.session_state.ra = float(raw_ra)
-        except:
-            st.write(":red[Please enter only numbers]")
+    st.text_input("Right Ascension", key="ra_input", placeholder="Enter Numbers", value="150.7818", disabled=st.session_state.is_playing)
 
-    raw_dec = st.text_input("Declination", placeholder="Enter Numbers", value="3.3502", disabled=st.session_state.is_playing)
-    
-    if raw_dec:
-        try:
-            st.session_state.dec = float(raw_dec)
-        except:
-            st.write(":red[Please enter only numbers]")
+    st.text_input("Declination", key="dec_input", placeholder="Enter Numbers", value="3.3502", disabled=st.session_state.is_playing)
 
-    submitButton = st.button("Submit", on_click=submit, disabled=st.session_state.is_playing)
-    
-    if (st.session_state.ra or st.session_state.ra == 0) and (st.session_state.dec or st.session_state.dec == 0):
-        st.session_state.error_text = ""
-        
-    errorText = st.write(st.session_state.error_text)
+    st.button("Submit", on_click=submit, disabled=st.session_state.is_playing)
+
+    st.write(st.session_state.error_text)
 
     if not st.session_state.downloading:
         if st.session_state.wave_choices:
-            wavelength = st.select_slider(
+            wave_default = {}
+            if "wave_slider" not in st.session_state:
+                # A default is only needed for the first render. Passing one once the
+                # value lives in the session state only earns a Streamlit warning.
+                wave_default["value"] = st.session_state.wave_choices[1] if "Please Submit Data Before Choosing A Wavelength" in st.session_state.wave_choices else st.session_state.wave_choices[0]
+            st.select_slider(
                 "Wavelength μm",
                 key="wave_slider",
                 options=st.session_state.wave_choices,
-                value=st.session_state.wave_choices[1] if "Please Submit Data Before Choosing A Wavelength" in st.session_state.wave_choices else st.session_state.wave_choices[0],
                 on_change=upWAVE,
                 disabled="Please Submit Data Before Choosing A Wavelength" in st.session_state.wave_choices,
+                **wave_default,
             )
 
         if st.session_state.date_choices:
-            date = st.select_slider(
+            date_default = {}
+            if "date_slider" not in st.session_state:
+                date_default["value"] = st.session_state.date_choices[1] if "Please Submit Data Before Choosing A Date" in st.session_state.date_choices else st.session_state.date_choices[0]
+            st.select_slider(
                 "Date",
                 key="date_slider",
                 options=st.session_state.date_choices,
-                value=st.session_state.date_choices[1] if "Please Submit Data Before Choosing A Date" in st.session_state.date_choices else st.session_state.date_choices[0],
                 on_change=upDATE,
                 disabled="Please Submit Data Before Choosing A Date" in st.session_state.date_choices,
+                **date_default,
             )
 
         st.button("Stop" if st.session_state.is_playing else "Play", on_click=toggle_play)
 
 logo = st.logo("images/logo-color.png", icon_image="images/logo-color.png")
-
-# loading_bar = st.progress(100, text="Downloading Images")
-# loading_bar.empty()
 
 footer_html = """
 <style>
